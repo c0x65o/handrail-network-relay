@@ -14,6 +14,12 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("restoring the previous installation", installer)
         self.assertIn('mv -Tf "$rollback_link" "$current_link"', installer)
         self.assertIn('SOURCE_COMMIT', installer)
+        self.assertIn(
+            'ln -sfnT "${current_link}/handrail-network-relay" '
+            '/usr/local/bin/handrail-network-relay',
+            installer,
+        )
+        self.assertIn('[[ ! -x /usr/local/bin/handrail-network-relay ]]', installer)
 
     def test_service_executes_only_the_current_release(self) -> None:
         unit = (ROOT / "packaging" / "systemd" / "handrail-network-relay.service").read_text(

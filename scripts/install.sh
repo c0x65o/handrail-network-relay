@@ -136,8 +136,8 @@ fi
 next_link=${install_root}/.current.$$
 ln -s "$release_dir" "$next_link"
 mv -Tf "$next_link" "$current_link"
-ln -sfn "${current_link}/handrail-network-relay" /usr/local/bin/handrail-network-relay
-ln -sfn "${current_link}/scripts/update-from-git.sh" /usr/local/bin/handrail-network-relay-update
+ln -sfnT "${current_link}/handrail-network-relay" /usr/local/bin/handrail-network-relay
+ln -sfnT "${current_link}/scripts/update-from-git.sh" /usr/local/bin/handrail-network-relay-update
 install -o root -g root -m 0644 "$service_source" "$service_path"
 
 systemctl daemon-reload
@@ -145,6 +145,7 @@ systemctl enable handrail-network-relay.service >/dev/null
 if ((start_service)); then
   if ! systemctl restart handrail-network-relay.service \
     || ! systemctl is-active --quiet handrail-network-relay.service \
+    || [[ ! -x /usr/local/bin/handrail-network-relay ]] \
     || [[ $("${current_link}/handrail-network-relay" --version) != "$version" ]]; then
     echo "commit ${source_commit} (version ${version}) failed to start; restoring the previous installation" >&2
     if [[ -n $previous_target ]]; then
