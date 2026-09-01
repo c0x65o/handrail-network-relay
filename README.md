@@ -34,16 +34,10 @@ cp config/config.example.ini relay.ini
 ```
 
 Set a stable Handrail relay ID and the exact subnets this machine is expected to
-route. Then configure Tailscale itself and approve the advertised routes in the
-tailnet administration console:
-
-```bash
-sudo ./scripts/enable-forwarding.sh --ipv4
-sudo tailscale set --advertise-routes=10.20.0.0/24,10.30.0.0/24
-```
-
-The relay observes Tailscale; it does not change Tailscale authentication or ACL
-configuration.
+route. Installation enables the required kernel forwarding settings and tells
+the already-authenticated Tailscale node to advertise exactly those CIDRs. Route
+approval (unless covered by Tailscale `autoApprovers`), ACL configuration, and
+firewall policy remain external.
 
 ## Install initially
 
@@ -61,8 +55,9 @@ The installer only accepts a clean Git checkout. It creates the locked-down
 `handrail-relay` system account, installs each immutable version and source
 commit under `/usr/local/lib/handrail-network-relay/releases`, atomically
 switches the `current` symlink, preserves an existing config unless `--config`
-is supplied, and starts the service. If the new service cannot start, the
-installer restores the previous installation and configuration.
+is supplied, applies its subnet-router settings, and starts the service. If the
+new service cannot start, the installer restores the previous installation and
+configuration.
 
 Check it with:
 

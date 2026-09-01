@@ -45,6 +45,8 @@ agent_source="${source_root}/src/handrail_network_relay.py"
 service_source="${source_root}/packaging/systemd/handrail-network-relay.service"
 version_source="${source_root}/VERSION"
 updater_source="${source_root}/scripts/update-from-git.sh"
+routing_source="${source_root}/scripts/configure-routing.sh"
+forwarding_source="${source_root}/scripts/enable-forwarding.sh"
 config_dir=/etc/handrail-network-relay
 config_path=${config_dir}/config.ini
 install_root=/usr/local/lib/handrail-network-relay
@@ -52,7 +54,7 @@ releases_dir=${install_root}/releases
 current_link=${install_root}/current
 service_path=/etc/systemd/system/handrail-network-relay.service
 
-for required_file in "$agent_source" "$service_source" "$version_source" "$updater_source"; do
+for required_file in "$agent_source" "$service_source" "$version_source" "$updater_source" "$routing_source" "$forwarding_source"; do
   [[ -f $required_file ]] || { echo "repository checkout is missing $required_file" >&2; exit 1; }
 done
 
@@ -76,6 +78,10 @@ else
   echo "initial installation requires --config PATH" >&2
   exit 2
 fi
+
+routing_config=$config_path
+[[ -n $config_source ]] && routing_config=$config_source
+"$routing_source" --config "$routing_config"
 
 if ! getent group handrail-relay >/dev/null; then
   groupadd --system handrail-relay
@@ -110,6 +116,8 @@ if [[ ! -d $release_dir ]]; then
   printf '%s\n' "$source_commit" >"${release_staging}/SOURCE_COMMIT"
   chmod 0644 "${release_staging}/SOURCE_COMMIT"
   install -o root -g root -m 0755 "$updater_source" "${release_staging}/scripts/update-from-git.sh"
+  install -o root -g root -m 0755 "$routing_source" "${release_staging}/scripts/configure-routing.sh"
+  install -o root -g root -m 0755 "$forwarding_source" "${release_staging}/scripts/enable-forwarding.sh"
   mv "$release_staging" "$release_dir"
 fi
 

@@ -43,6 +43,14 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("tar", updater)
         self.assertNotIn("curl", updater)
 
+    def test_installer_applies_exact_configured_subnet_routes(self) -> None:
+        installer = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+        routing = (ROOT / "scripts" / "configure-routing.sh").read_text(encoding="utf-8")
+        self.assertIn('"$routing_source" --config "$routing_config"', installer)
+        self.assertIn('tailscale set --advertise-routes="${routing_metadata[0]}"', routing)
+        self.assertIn("default routes cannot be advertised", routing)
+        self.assertIn('forwarding_args+=(--ipv4)', routing)
+
 
 if __name__ == "__main__":
     unittest.main()
