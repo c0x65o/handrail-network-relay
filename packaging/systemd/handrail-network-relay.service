@@ -1,0 +1,36 @@
+[Unit]
+Description=Handrail Network Relay health agent
+Documentation=https://github.com/c0x65o/handrail-network-relay
+Wants=network-online.target tailscaled.service
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=handrail-relay
+Group=handrail-relay
+ExecStart=/usr/local/lib/handrail-network-relay/current/handrail-network-relay --config /etc/handrail-network-relay/config.ini run
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+RuntimeDirectory=handrail-network-relay
+RuntimeDirectoryMode=0755
+StateDirectory=handrail-network-relay
+StateDirectoryMode=0750
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
