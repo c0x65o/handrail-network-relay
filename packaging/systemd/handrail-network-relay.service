@@ -5,7 +5,7 @@ Wants=network-online.target tailscaled.service
 After=network-online.target tailscaled.service
 
 [Service]
-Type=simple
+Type=exec
 User=handrail-relay
 Group=handrail-relay
 ExecStart=/usr/local/lib/handrail-network-relay/current/handrail-network-relay --config /etc/handrail-network-relay/config.ini run

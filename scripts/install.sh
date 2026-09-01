@@ -104,7 +104,7 @@ release_key=${version}-${source_commit}
 release_dir=${releases_dir}/${release_key}
 if [[ ! -d $release_dir ]]; then
   release_staging=$(mktemp -d "${releases_dir}/.${release_key}.XXXXXXXX")
-  install -d -o root -g root -m 0755 "${release_staging}/scripts"
+  install -d -o root -g root -m 0755 "$release_staging" "${release_staging}/scripts"
   install -o root -g root -m 0755 "$agent_source" "${release_staging}/handrail-network-relay"
   install -o root -g root -m 0644 "$version_source" "${release_staging}/VERSION"
   printf '%s\n' "$source_commit" >"${release_staging}/SOURCE_COMMIT"

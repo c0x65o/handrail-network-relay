@@ -15,6 +15,11 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('mv -Tf "$rollback_link" "$current_link"', installer)
         self.assertIn('SOURCE_COMMIT', installer)
         self.assertIn(
+            'install -d -o root -g root -m 0755 "$release_staging" '
+            '"${release_staging}/scripts"',
+            installer,
+        )
+        self.assertIn(
             'ln -sfnT "${current_link}/handrail-network-relay" '
             '/usr/local/bin/handrail-network-relay',
             installer,
@@ -29,6 +34,7 @@ class PackagingTests(unittest.TestCase):
             "ExecStart=/usr/local/lib/handrail-network-relay/current/handrail-network-relay",
             unit,
         )
+        self.assertIn("Type=exec", unit)
 
     def test_updater_fetches_the_public_repository_without_artifacts(self) -> None:
         updater = (ROOT / "scripts" / "update-from-git.sh").read_text(encoding="utf-8")
