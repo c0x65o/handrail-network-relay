@@ -40,5 +40,5 @@ tar \
   -czf "$artifact_path" \
   -C "$staging_dir" \
   "$artifact_name"
-sha256sum "$artifact_path" >"${artifact_path}.sha256"
+(cd "$dist_dir" && sha256sum "${artifact_name}.tar.gz" >"${artifact_name}.tar.gz.sha256")
 echo "Built ${artifact_path}"
