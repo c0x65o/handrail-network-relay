@@ -13,8 +13,7 @@ the network path they use.
 - Linux with systemd
 - Python 3.9 or newer (standard library only)
 - Tailscale installed and already joined to the intended tailnet
-- `curl`, `tar`, and `sha256sum` when using pull-based updates
-- `ssh` and `scp` on the operator machine when pushing an update
+- Git
 
 ## Repository layout
 
@@ -22,7 +21,7 @@ the network path they use.
 src/                 Relay process and command-line interface
 config/              Example relay configuration
 packaging/systemd/   Hardened systemd service
-scripts/             Install, package, push-update, and uninstall tooling
+scripts/             Install, Git update, forwarding, and uninstall tooling
 tests/               Standard-library unit tests
 ```
 
@@ -48,17 +47,22 @@ configuration.
 
 ## Install initially
 
-From a checkout or an unpacked release bundle:
+Clone the public repository, create the relay configuration, and install the
+currently committed version:
 
 ```bash
+git clone https://github.com/c0x65o/handrail-network-relay.git
+cd handrail-network-relay
+cp config/config.example.ini relay.ini
 sudo ./scripts/install.sh --config ./relay.ini
 ```
 
-The installer creates the locked-down `handrail-relay` system account, installs
-each immutable version under `/usr/local/lib/handrail-network-relay/releases`,
-atomically switches the `current` symlink, preserves an existing config unless
-`--config` is supplied, and starts the service. If the new service cannot start,
-the installer restores the previous release and configuration.
+The installer only accepts a clean Git checkout. It creates the locked-down
+`handrail-relay` system account, installs each immutable version and source
+commit under `/usr/local/lib/handrail-network-relay/releases`, atomically
+switches the `current` symlink, preserves an existing config unless `--config`
+is supplied, and starts the service. If the new service cannot start, the
+installer restores the previous installation and configuration.
 
 Check it with:
 
@@ -68,39 +72,24 @@ sudo /usr/local/bin/handrail-network-relay status
 sudo /usr/local/bin/handrail-network-relay health
 ```
 
-## Build and push an update
+## Update from Git
 
-Build a release bundle and checksum:
-
-```bash
-make release
-```
-
-For an initial remote installation, push it over SSH with a configuration file:
+The installed updater fetches the current commit from the public `main` branch:
 
 ```bash
-./scripts/push-update.sh \
-  --host 10.20.0.10 \
-  --user relay-admin \
-  --port 22 \
-  --identity ~/.ssh/relay-admin \
-  --config ./relay.ini \
-  --artifact dist/handrail-network-relay-$(cat VERSION).tar.gz
+sudo handrail-network-relay-update
 ```
 
-Omit `--config` on later pushes to preserve the relay's installed configuration.
-
-The push script verifies the archive locally, copies it to a fresh remote
-temporary directory, verifies it again on the relay, and invokes the bundled
-installer through `sudo`. It does not store or copy the SSH key into the relay
-software.
-
-For a pull-based update, run the installed updater on the relay with an HTTPS
-artifact URL and its expected SHA-256 digest. The digest is mandatory:
+Handrail pins lifecycle operations to a full commit before deploying. The same
+behavior is available directly by passing a commit or another public Git ref:
 
 ```bash
-sudo handrail-network-relay-update https://downloads.example/relay.tar.gz SHA256
+sudo handrail-network-relay-update --ref c796f2529d010969c9f05d86fb13faf280234eb8
 ```
+
+No release registration, package archive, repository credential, or application
+secret is used. `VERSION` describes the software version and `SOURCE_COMMIT`
+identifies the exact installed source in relay status.
 
 ## Development
 

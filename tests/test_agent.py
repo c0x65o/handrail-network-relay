@@ -82,6 +82,7 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(result["tailscale"]["ips"], ["100.64.0.10"])
         self.assertEqual(result["expected_subnets"], ["10.20.0.0/24"])
         self.assertEqual(result["config_revision"], 7)
+        self.assertEqual(result["source_commit"], relay.load_source_commit())
 
     def test_inspection_requires_forwarding_for_matching_ip_family(self) -> None:
         config = {

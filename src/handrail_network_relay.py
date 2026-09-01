@@ -49,6 +49,30 @@ def load_version() -> str:
     return "development"
 
 
+def load_source_commit() -> str | None:
+    script_path = Path(__file__).resolve()
+    candidates = (script_path.with_name("SOURCE_COMMIT"), script_path.parent.parent / "SOURCE_COMMIT")
+    for candidate in candidates:
+        try:
+            value = candidate.read_text(encoding="ascii").strip().lower()
+        except OSError:
+            continue
+        if len(value) == 40 and all(character in "0123456789abcdef" for character in value):
+            return value
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(script_path.parent.parent), "rev-parse", "--verify", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return None
+    value = completed.stdout.strip().lower()
+    return value if completed.returncode == 0 and len(value) == 40 else None
+
+
 def parse_subnets(raw_value: str) -> list[str]:
     subnets: list[str] = []
     for raw_subnet in raw_value.split(","):
@@ -221,6 +245,7 @@ def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
         "relay_id": config["relay_id"],
         "site": config["site"] or None,
         "agent_version": load_version(),
+        "source_commit": load_source_commit(),
         "config_revision": config["config_revision"],
         "observed_at": iso_timestamp(utc_now()),
         "healthy": all(check["healthy"] for check in checks),

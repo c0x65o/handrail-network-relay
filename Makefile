@@ -1,4 +1,4 @@
-.PHONY: check release test
+.PHONY: check test
 
 check:
 	python3 -m py_compile src/handrail_network_relay.py
@@ -7,6 +7,3 @@ check:
 
 test:
 	python3 -m unittest discover -s tests -v
-
-release: check test
-	./scripts/build-release.sh
