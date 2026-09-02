@@ -125,10 +125,19 @@ def load_config(path: str) -> dict[str, Any]:
     if not Path(status_file).is_absolute():
         raise ConfigurationError("relay.status_file must be an absolute path")
 
+    try:
+        tailscale_site_id = relay.getint("tailscale_site_id")
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError("relay.tailscale_site_id must be an integer") from exc
+    if not 0 <= tailscale_site_id <= 65535:
+        raise ConfigurationError("relay.tailscale_site_id must be between 0 and 65535")
+
     return {
         "relay_id": relay_id,
         "site": relay.get("site", "").strip(),
         "expected_subnets": parse_subnets(relay.get("expected_subnets", "")),
+        "source_ipv4_subnets": parse_subnets(relay.get("source_ipv4_subnets", "")),
+        "tailscale_site_id": tailscale_site_id,
         "config_revision": config_revision,
         "poll_interval_seconds": poll_seconds,
         "status_file": status_file,
@@ -203,8 +212,28 @@ def tailscale_status() -> dict[str, Any]:
     }
 
 
+def tailscale_advertised_routes() -> tuple[list[str], str | None]:
+    executable = os.environ.get("HANDRAIL_RELAY_TAILSCALE_BIN", "/usr/bin/tailscale")
+    try:
+        completed = subprocess.run(
+            [executable, "debug", "prefs"], check=False, capture_output=True,
+            text=True, timeout=10,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        return [], str(exc)
+    if completed.returncode != 0:
+        return [], (completed.stderr.strip() or f"tailscale debug prefs exited {completed.returncode}")[:500]
+    try:
+        payload = json.loads(completed.stdout)
+        routes = [str(ipaddress.ip_network(value, strict=True)) for value in (payload.get("AdvertiseRoutes") or [])]
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        return [], f"invalid tailscale preferences: {exc}"
+    return sorted(set(routes)), None
+
+
 def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
     tailscale = tailscale_status()
+    advertised_routes, advertised_routes_error = tailscale_advertised_routes()
     ipv4_path = os.environ.get(
         "HANDRAIL_RELAY_IPV4_FORWARD_PATH", "/proc/sys/net/ipv4/ip_forward"
     )
@@ -213,12 +242,10 @@ def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
     )
     ipv4_enabled, ipv4_error = read_forwarding(ipv4_path)
     ipv6_enabled, ipv6_error = read_forwarding(ipv6_path)
-    requires_ipv4 = any(
-        ipaddress.ip_network(route).version == 4 for route in config["expected_subnets"]
-    )
-    requires_ipv6 = any(
-        ipaddress.ip_network(route).version == 6 for route in config["expected_subnets"]
-    )
+    requires_ipv4 = bool(config["source_ipv4_subnets"])
+    requires_ipv6 = bool(config["expected_subnets"])
+    expected_routes = sorted(config["expected_subnets"])
+    routes_match = advertised_routes == expected_routes
 
     checks = [
         {
@@ -238,10 +265,16 @@ def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
             "detail": ipv6_error or ("enabled" if ipv6_enabled else "disabled"),
             "required": requires_ipv6,
         },
+        {
+            "name": "advertised_4via6_routes",
+            "healthy": routes_match and advertised_routes_error is None,
+            "detail": advertised_routes_error or ("configured" if routes_match else "advertised routes differ from configuration"),
+            "required": True,
+        },
     ]
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "relay_id": config["relay_id"],
         "site": config["site"] or None,
         "agent_version": load_version(),
@@ -250,6 +283,9 @@ def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
         "observed_at": iso_timestamp(utc_now()),
         "healthy": all(check["healthy"] for check in checks),
         "expected_subnets": config["expected_subnets"],
+        "source_ipv4_subnets": config["source_ipv4_subnets"],
+        "tailscale_site_id": config["tailscale_site_id"],
+        "advertised_4via6_routes": advertised_routes,
         "tailscale": tailscale,
         "forwarding": {"ipv4": ipv4_enabled, "ipv6": ipv6_enabled},
         "checks": checks,

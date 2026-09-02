@@ -50,6 +50,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('tailscale set --advertise-routes="${routing_metadata[0]}"', routing)
         self.assertIn("default routes cannot be advertised", routing)
         self.assertIn('forwarding_args+=(--ipv4)', routing)
+        self.assertIn("canonical 4via6 IPv6 routes", routing)
+        self.assertIn("source_ipv4_subnets", routing)
 
 
 if __name__ == "__main__":

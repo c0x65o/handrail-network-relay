@@ -2,11 +2,18 @@
 
 Handrail Network Relay is a small Linux service installed on a Tailscale subnet
 router. It reports whether Tailscale and kernel forwarding are ready for the
-subnets assigned to that relay.
+canonical 4via6 routes assigned to that relay.
 
 It intentionally does not contain backup, SSH orchestration, or application job
-logic. Handrail owns those workflows; this service only describes the health of
-the network path they use.
+logic, credentials, or connection termination. Handrail owns those workflows;
+this service only configures and describes the health of the network path they
+use.
+
+Handrail assigns each physical site an immutable site ID and translates its
+original IPv4 inventory into Tailscale's 4via6 space. Relay configuration keeps
+the original CIDRs in `source_ipv4_subnets` and advertises only the derived IPv6
+CIDRs in `expected_subnets`. Route approval and Grants remain in the tailnet
+control plane.
 
 ## Requirements
 
@@ -33,9 +40,10 @@ Create a configuration from the example:
 cp config/config.example.ini relay.ini
 ```
 
-Set a stable Handrail relay ID and the exact subnets this machine is expected to
-route. Installation enables the required kernel forwarding settings and tells
-the already-authenticated Tailscale node to advertise exactly those CIDRs. Route
+Set the stable Handrail relay ID, immutable 4via6 site ID, original IPv4
+subnets, and their Handrail-derived 4via6 routes. Installation enables the
+required kernel forwarding settings and tells the already-authenticated
+Tailscale node to advertise exactly the canonical IPv6 CIDRs. Route
 approval (unless covered by Tailscale `autoApprovers`), ACL configuration, and
 firewall policy remain external.
 

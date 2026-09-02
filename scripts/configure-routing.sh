@@ -58,10 +58,23 @@ for raw_route in parser["relay"].get("expected_subnets", "").split(","):
         routes.append(normalized)
 if not routes:
     raise SystemExit("relay.expected_subnets must contain at least one CIDR")
+if any(ipaddress.ip_network(route).version != 6 for route in routes):
+    raise SystemExit("relay.expected_subnets must contain only canonical 4via6 IPv6 routes")
+
+source_routes = []
+for raw_route in parser["relay"].get("source_ipv4_subnets", "").split(","):
+    value = raw_route.strip()
+    if value:
+        route = ipaddress.ip_network(value, strict=True)
+        if route.version != 4 or route.prefixlen == 0:
+            raise SystemExit("relay.source_ipv4_subnets must contain bounded IPv4 CIDRs")
+        source_routes.append(str(route))
+if not source_routes:
+    raise SystemExit("relay.source_ipv4_subnets must contain at least one IPv4 CIDR")
 
 print(",".join(routes))
-print("1" if any(ipaddress.ip_network(route).version == 4 for route in routes) else "0")
-print("1" if any(ipaddress.ip_network(route).version == 6 for route in routes) else "0")
+print("1")
+print("1")
 PY
 
 mapfile -t routing_metadata <"$metadata_file"

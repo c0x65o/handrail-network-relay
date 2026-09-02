@@ -24,7 +24,9 @@ class RelayTests(unittest.TestCase):
         defaults = {
             "id": "relay-test-1",
             "site": "Test Site",
-            "expected_subnets": "10.20.0.0/24",
+            "tailscale_site_id": "7",
+            "source_ipv4_subnets": "10.20.0.0/24",
+            "expected_subnets": "fd7a:115c:a1e0:b1a:0:7:a14:0/120",
             "config_revision": "7",
             "poll_interval_seconds": "30",
             "status_file": str(directory / "status.json"),
@@ -40,18 +42,20 @@ class RelayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             config_path = self.write_config(
-                root, expected_subnets="10.20.0.0/24, 2001:db8::/64, 10.20.0.0/24"
+                root, expected_subnets="fd7a:115c:a1e0:b1a:0:7:a14:0/120, 2001:db8::/64, fd7a:115c:a1e0:b1a:0:7:a14:0/120"
             )
             config = relay.load_config(str(config_path))
 
         self.assertEqual(config["relay_id"], "relay-test-1")
         self.assertEqual(config["config_revision"], 7)
-        self.assertEqual(config["expected_subnets"], ["10.20.0.0/24", "2001:db8::/64"])
+        self.assertEqual(config["tailscale_site_id"], 7)
+        self.assertEqual(config["source_ipv4_subnets"], ["10.20.0.0/24"])
+        self.assertEqual(config["expected_subnets"], ["fd7a:115c:a1e0:b1a:0:7:a14:0/120", "2001:db8::/64"])
 
     def test_load_config_rejects_host_bits_in_subnet(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            config_path = self.write_config(root, expected_subnets="10.20.0.5/24")
+            config_path = self.write_config(root, expected_subnets="fd7a:115c:a1e0:b1a:0:7:a14:5/120")
             with self.assertRaises(relay.ConfigurationError):
                 relay.load_config(str(config_path))
 
@@ -62,14 +66,18 @@ class RelayTests(unittest.TestCase):
             tailscale = root / "tailscale"
             tailscale.write_text(
                 "#!/bin/sh\n"
-                "printf '%s\\n' '{\"BackendState\":\"Running\",\"Self\":{\"Online\":true,\"TailscaleIPs\":[\"100.64.0.10\"]}}'\n",
+                "if [ \"$1\" = debug ]; then\n"
+                "  printf '%s\\n' '{\"AdvertiseRoutes\":[\"fd7a:115c:a1e0:b1a:0:7:a14:0/120\"]}'\n"
+                "else\n"
+                "  printf '%s\\n' '{\"BackendState\":\"Running\",\"Self\":{\"Online\":true,\"TailscaleIPs\":[\"100.64.0.10\"]}}'\n"
+                "fi\n",
                 encoding="utf-8",
             )
             tailscale.chmod(tailscale.stat().st_mode | stat.S_IXUSR)
             ipv4 = root / "ipv4"
             ipv6 = root / "ipv6"
             ipv4.write_text("1\n", encoding="ascii")
-            ipv6.write_text("0\n", encoding="ascii")
+            ipv6.write_text("1\n", encoding="ascii")
             environment = {
                 "HANDRAIL_RELAY_TAILSCALE_BIN": str(tailscale),
                 "HANDRAIL_RELAY_IPV4_FORWARD_PATH": str(ipv4),
@@ -80,7 +88,9 @@ class RelayTests(unittest.TestCase):
 
         self.assertTrue(result["healthy"])
         self.assertEqual(result["tailscale"]["ips"], ["100.64.0.10"])
-        self.assertEqual(result["expected_subnets"], ["10.20.0.0/24"])
+        self.assertEqual(result["source_ipv4_subnets"], ["10.20.0.0/24"])
+        self.assertEqual(result["expected_subnets"], ["fd7a:115c:a1e0:b1a:0:7:a14:0/120"])
+        self.assertEqual(result["advertised_4via6_routes"], result["expected_subnets"])
         self.assertEqual(result["config_revision"], 7)
         self.assertEqual(result["source_commit"], relay.load_source_commit())
 
@@ -88,7 +98,9 @@ class RelayTests(unittest.TestCase):
         config = {
             "relay_id": "relay-test-1",
             "site": "",
-            "expected_subnets": ["10.20.0.0/24", "2001:db8::/64"],
+            "tailscale_site_id": 7,
+            "source_ipv4_subnets": ["10.20.0.0/24"],
+            "expected_subnets": ["fd7a:115c:a1e0:b1a:0:7:a14:0/120"],
             "config_revision": 3,
             "poll_interval_seconds": 30,
             "status_file": "/tmp/status.json",
@@ -103,7 +115,7 @@ class RelayTests(unittest.TestCase):
                 "ips": ["100.64.0.10"],
                 "error": None,
             },
-        ), mock.patch.object(relay, "read_forwarding", side_effect=[(True, None), (False, None)]):
+        ), mock.patch.object(relay, "tailscale_advertised_routes", return_value=(config["expected_subnets"], None)), mock.patch.object(relay, "read_forwarding", side_effect=[(True, None), (False, None)]):
             result = relay.inspect_relay(config)
 
         self.assertFalse(result["healthy"])
