@@ -125,19 +125,11 @@ def load_config(path: str) -> dict[str, Any]:
     if not Path(status_file).is_absolute():
         raise ConfigurationError("relay.status_file must be an absolute path")
 
-    try:
-        tailscale_site_id = relay.getint("tailscale_site_id")
-    except (TypeError, ValueError) as exc:
-        raise ConfigurationError("relay.tailscale_site_id must be an integer") from exc
-    if not 0 <= tailscale_site_id <= 65535:
-        raise ConfigurationError("relay.tailscale_site_id must be between 0 and 65535")
-
     return {
         "relay_id": relay_id,
         "site": relay.get("site", "").strip(),
         "expected_subnets": parse_subnets(relay.get("expected_subnets", "")),
         "source_ipv4_subnets": parse_subnets(relay.get("source_ipv4_subnets", "")),
-        "tailscale_site_id": tailscale_site_id,
         "config_revision": config_revision,
         "poll_interval_seconds": poll_seconds,
         "status_file": status_file,
@@ -242,8 +234,7 @@ def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
     )
     ipv4_enabled, ipv4_error = read_forwarding(ipv4_path)
     ipv6_enabled, ipv6_error = read_forwarding(ipv6_path)
-    requires_ipv4 = bool(config["source_ipv4_subnets"])
-    requires_ipv6 = bool(config["expected_subnets"])
+    requires_ipv4 = bool(config["expected_subnets"])
     expected_routes = sorted(config["expected_subnets"])
     routes_match = advertised_routes == expected_routes
 
@@ -261,12 +252,12 @@ def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
         },
         {
             "name": "ipv6_forwarding",
-            "healthy": not requires_ipv6 or ipv6_enabled,
+            "healthy": True,
             "detail": ipv6_error or ("enabled" if ipv6_enabled else "disabled"),
-            "required": requires_ipv6,
+            "required": False,
         },
         {
-            "name": "advertised_4via6_routes",
+            "name": "advertised_subnet_routes",
             "healthy": routes_match and advertised_routes_error is None,
             "detail": advertised_routes_error or ("configured" if routes_match else "advertised routes differ from configuration"),
             "required": True,
@@ -274,7 +265,7 @@ def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
     ]
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "relay_id": config["relay_id"],
         "site": config["site"] or None,
         "agent_version": load_version(),
@@ -284,8 +275,7 @@ def inspect_relay(config: dict[str, Any]) -> dict[str, Any]:
         "healthy": all(check["healthy"] for check in checks),
         "expected_subnets": config["expected_subnets"],
         "source_ipv4_subnets": config["source_ipv4_subnets"],
-        "tailscale_site_id": config["tailscale_site_id"],
-        "advertised_4via6_routes": advertised_routes,
+        "advertised_subnet_routes": advertised_routes,
         "tailscale": tailscale,
         "forwarding": {"ipv4": ipv4_enabled, "ipv6": ipv6_enabled},
         "checks": checks,

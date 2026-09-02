@@ -58,8 +58,8 @@ for raw_route in parser["relay"].get("expected_subnets", "").split(","):
         routes.append(normalized)
 if not routes:
     raise SystemExit("relay.expected_subnets must contain at least one CIDR")
-if any(ipaddress.ip_network(route).version != 6 for route in routes):
-    raise SystemExit("relay.expected_subnets must contain only canonical 4via6 IPv6 routes")
+if any(ipaddress.ip_network(route).version != 4 for route in routes):
+    raise SystemExit("relay.expected_subnets must contain only bounded IPv4 routes")
 
 source_routes = []
 for raw_route in parser["relay"].get("source_ipv4_subnets", "").split(","):
@@ -74,18 +74,16 @@ if not source_routes:
 
 print(",".join(routes))
 print("1")
-print("1")
 PY
 
 mapfile -t routing_metadata <"$metadata_file"
-[[ ${#routing_metadata[@]} -eq 3 && -n ${routing_metadata[0]} ]] || {
+[[ ${#routing_metadata[@]} -eq 2 && -n ${routing_metadata[0]} ]] || {
   echo "could not derive relay routing settings from config" >&2
   exit 1
 }
 
 forwarding_args=()
 [[ ${routing_metadata[1]} == 1 ]] && forwarding_args+=(--ipv4)
-[[ ${routing_metadata[2]} == 1 ]] && forwarding_args+=(--ipv6)
 "$forwarding_script" "${forwarding_args[@]}"
 tailscale set --advertise-routes="${routing_metadata[0]}"
 echo "Tailscale routes advertised: ${routing_metadata[0]}"

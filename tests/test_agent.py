@@ -24,9 +24,8 @@ class RelayTests(unittest.TestCase):
         defaults = {
             "id": "relay-test-1",
             "site": "Test Site",
-            "tailscale_site_id": "7",
             "source_ipv4_subnets": "10.20.0.0/24",
-            "expected_subnets": "fd7a:115c:a1e0:b1a:0:7:a14:0/120",
+            "expected_subnets": "10.20.0.0/24",
             "config_revision": "7",
             "poll_interval_seconds": "30",
             "status_file": str(directory / "status.json"),
@@ -42,20 +41,19 @@ class RelayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             config_path = self.write_config(
-                root, expected_subnets="fd7a:115c:a1e0:b1a:0:7:a14:0/120, 2001:db8::/64, fd7a:115c:a1e0:b1a:0:7:a14:0/120"
+                root, expected_subnets="10.20.0.0/24, 10.21.0.0/24, 10.20.0.0/24"
             )
             config = relay.load_config(str(config_path))
 
         self.assertEqual(config["relay_id"], "relay-test-1")
         self.assertEqual(config["config_revision"], 7)
-        self.assertEqual(config["tailscale_site_id"], 7)
         self.assertEqual(config["source_ipv4_subnets"], ["10.20.0.0/24"])
-        self.assertEqual(config["expected_subnets"], ["fd7a:115c:a1e0:b1a:0:7:a14:0/120", "2001:db8::/64"])
+        self.assertEqual(config["expected_subnets"], ["10.20.0.0/24", "10.21.0.0/24"])
 
     def test_load_config_rejects_host_bits_in_subnet(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            config_path = self.write_config(root, expected_subnets="fd7a:115c:a1e0:b1a:0:7:a14:5/120")
+            config_path = self.write_config(root, expected_subnets="10.20.0.5/24")
             with self.assertRaises(relay.ConfigurationError):
                 relay.load_config(str(config_path))
 
@@ -67,7 +65,7 @@ class RelayTests(unittest.TestCase):
             tailscale.write_text(
                 "#!/bin/sh\n"
                 "if [ \"$1\" = debug ]; then\n"
-                "  printf '%s\\n' '{\"AdvertiseRoutes\":[\"fd7a:115c:a1e0:b1a:0:7:a14:0/120\"]}'\n"
+                "  printf '%s\\n' '{\"AdvertiseRoutes\":[\"10.20.0.0/24\"]}'\n"
                 "else\n"
                 "  printf '%s\\n' '{\"BackendState\":\"Running\",\"Self\":{\"Online\":true,\"TailscaleIPs\":[\"100.64.0.10\"]}}'\n"
                 "fi\n",
@@ -89,18 +87,17 @@ class RelayTests(unittest.TestCase):
         self.assertTrue(result["healthy"])
         self.assertEqual(result["tailscale"]["ips"], ["100.64.0.10"])
         self.assertEqual(result["source_ipv4_subnets"], ["10.20.0.0/24"])
-        self.assertEqual(result["expected_subnets"], ["fd7a:115c:a1e0:b1a:0:7:a14:0/120"])
-        self.assertEqual(result["advertised_4via6_routes"], result["expected_subnets"])
+        self.assertEqual(result["expected_subnets"], ["10.20.0.0/24"])
+        self.assertEqual(result["advertised_subnet_routes"], result["expected_subnets"])
         self.assertEqual(result["config_revision"], 7)
         self.assertEqual(result["source_commit"], relay.load_source_commit())
 
-    def test_inspection_requires_forwarding_for_matching_ip_family(self) -> None:
+    def test_inspection_requires_only_ipv4_forwarding_for_subnet_routes(self) -> None:
         config = {
             "relay_id": "relay-test-1",
             "site": "",
-            "tailscale_site_id": 7,
             "source_ipv4_subnets": ["10.20.0.0/24"],
-            "expected_subnets": ["fd7a:115c:a1e0:b1a:0:7:a14:0/120"],
+            "expected_subnets": ["10.20.0.0/24"],
             "config_revision": 3,
             "poll_interval_seconds": 30,
             "status_file": "/tmp/status.json",
@@ -118,10 +115,11 @@ class RelayTests(unittest.TestCase):
         ), mock.patch.object(relay, "tailscale_advertised_routes", return_value=(config["expected_subnets"], None)), mock.patch.object(relay, "read_forwarding", side_effect=[(True, None), (False, None)]):
             result = relay.inspect_relay(config)
 
-        self.assertFalse(result["healthy"])
+        self.assertTrue(result["healthy"])
         checks = {check["name"]: check for check in result["checks"]}
         self.assertTrue(checks["ipv4_forwarding"]["healthy"])
-        self.assertFalse(checks["ipv6_forwarding"]["healthy"])
+        self.assertTrue(checks["ipv6_forwarding"]["healthy"])
+        self.assertFalse(checks["ipv6_forwarding"]["required"])
 
     def test_status_write_is_readable_and_current(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
